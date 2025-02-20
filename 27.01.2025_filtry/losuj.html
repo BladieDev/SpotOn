@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Losuj Spot</title>
+</head>
+<body>
+    <h1>Losuj Punkt na Mapie</h1>
+    <button id="losuj-spot-btn">Losuj Spot</button>
+
+    <script>
+        document.getElementById('losuj-spot-btn').addEventListener('click', function () {
+            // Dodajmy logi do debugowania
+            console.log('Kliknięto przycisk losowania spota');
+            
+            // Wywołanie `losuj_spot.php` z poprawnym URL
+            fetch('losuj.php')
+                .then(response => {
+                    console.log('Otrzymano odpowiedź z serwera:', response);
+                    if (!response.ok) {
+                        throw new Error(`Błąd HTTP: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Dane z serwera:', data);
+                    if (data.error) {
+                        alert(`Błąd: ${data.error}`);
+                        return;
+                    }
+                    // Przekierowanie do `index.php` z parametrami lokalizacji
+                    const url = `index.php?lat=${data.latitude}&lon=${data.longitude}&name=${encodeURIComponent(data.name)}`;
+                    console.log('Przekierowanie do:', url);
+                    window.location.href = url;
+                })
+                .catch(error => {
+                    console.error('Błąd:', error);
+                    alert('Wystąpił błąd podczas losowania spota. Sprawdź konsolę, aby uzyskać więcej informacji.');
+                });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="znajomi.css">
+    <title>Wyszukiwanie znajomych</title>
+</head>
+<body>
+    <h1>Wyszukaj znajomych</h1>
+    <input type="text" id="searchInput" placeholder="Wpisz nazwę znajomego">
+    <div id="resultsContainer"></div>
+
+    <h2>Twoi znajomi</h2>
+    <ul id="friendsList"></ul>
+    <!-- Kod wyświetlania zaproszeń w znajomi.html -->
+    <?php include('load_friends.php'); ?>
+
+    <h2>Zaproszenia do znajomych</h2>
+    <ul id="pendingRequests"></ul>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const searchInput = document.getElementById("searchInput");
+            searchInput.addEventListener("input", function() {
+                const query = searchInput.value;
+                if (query.length > 0) {
+                    fetch(`search.php?query=${query}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                const results = data.users;
+                                const resultsContainer = document.getElementById("resultsContainer");
+                                resultsContainer.innerHTML = "";
+                                results.forEach(user => {
+                                    const userElement = document.createElement("div");
+                                    userElement.textContent = user.username;
+                                    const inviteButton = document.createElement("button");
+                                    inviteButton.textContent = "Wyślij zaproszenie";
+                                    inviteButton.onclick = function() {
+                                        sendFriendRequest(user.id);
+                                    };
+                                    userElement.appendChild(inviteButton);
+                                    resultsContainer.appendChild(userElement);
+                                });
+                            } else {
+                                console.error(data.message);
+                            }
+                        })
+                        .catch(error => console.error('Error:', error));
+                } else {
+                    document.getElementById("resultsContainer").innerHTML = "";
+                }
+            });
+        });
+
+        function sendFriendRequest(receiverId) {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "send_friend_request.php", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        alert("Zaproszenie zostało wysłane!");
+                    } else {
+                        alert(response.error);
+                    }
+                }
+            };
+            xhr.send("receiver_id=" + receiverId);
+        }
+
+        function loadFriends() {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", "load_friends.php", true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    let output = "<h3>Twoi znajomi:</h3><ul>";
+                    if (response.success && response.friends.length > 0) {
+                        response.friends.forEach(friend => {
+                            output += `
+                                <li>
+                                    ${friend.username} 
+                                    <button onclick="removeFriend(${friend.friend_id})">Usuń</button>
+                                </li>`;
+                        });
+                    } else {
+                        output += "<li>Brak znajomych.</li>";
+                    }
+                    output += "</ul>";
+                    document.getElementById("friendsList").innerHTML = output;
+                }
+            };
+            xhr.send();
+        }
+
+        function removeFriend(friendId) {
+            const confirmRemoval = confirm("Czy na pewno chcesz usunąć tego znajomego?");
+            if (confirmRemoval) {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", "remove_friend.php", true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        const response = JSON.parse(xhr.responseText);
+                        alert(response.message || response.error);
+                        loadFriends(); // Odśwież listę znajomych po usunięciu
+                    }
+                };
+                xhr.send("friend_id=" + friendId);
+            }
+        }
+
+        function checkPendingRequests() {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", "check_pending_requests.php", true);
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    let response;
+                    try {
+                        // Spróbuj sparsować JSON
+                        response = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        console.error("Błąd parsowania JSON:", xhr.responseText);
+                        document.getElementById("pendingRequests").innerHTML = "Błąd serwera: nieprawidłowa odpowiedź.";
+                        return;
+                    }
+
+                    // Jeśli JSON jest poprawny, obsłuż dane
+                    if (response.success && response.requests.length > 0) {
+                        let output = "<h3>Masz nowe zaproszenia do znajomych:</h3><ul>";
+                        response.requests.forEach(request => {
+                            output += `
+                                <li>
+                                    ${request.sender_name}
+                                    <button onclick="respondToRequest(${request.request_id}, 'accept')">Akceptuj</button>
+                                    <button onclick="respondToRequest(${request.request_id}, 'reject')">Odrzuć</button>
+                                </li>`;
+                        });
+                        output += "</ul>";
+                        document.getElementById("pendingRequests").innerHTML = output;
+                    } else {
+                        document.getElementById("pendingRequests").innerHTML = "Brak nowych zaproszeń.";
+                    }
+                } else {
+                    console.error("Błąd sieci:", xhr.status, xhr.statusText);
+                    document.getElementById("pendingRequests").innerHTML = "Błąd sieci.";
+                }
+            };
+            xhr.send();
+        }
+
+        function respondToRequest(requestId, action) {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "accept_friends_request.php", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    alert(response.message || response.error);
+                    loadFriends(); // Odśwież listę znajomych po zaakceptowaniu zaproszenia
+                    checkPendingRequests(); // Odśwież listę zaproszeń po odpowiedzi
+                }
+            };
+            xhr.send("request_id=" + requestId + "&action=" + action);
+        }
+
+        // Uruchomienie ładowania znajomych i zaproszeń po załadowaniu strony
+        window.onload = function() {
+            loadFriends();
+            checkPendingRequests();
+        };
+    </script>
+
+    <div id="pendingRequests"></div>
+    <div id="friendsList"></div>
+</body>
+</html>
